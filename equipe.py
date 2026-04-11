@@ -385,7 +385,7 @@ def dialog_envoi(generator, teams):
         "Entrez votre prénom pour identifier qui a généré cette composition.</p>",
         unsafe_allow_html=True
     )
-    nom_saisi = st.text_input("Votre prénom", placeholder="Ex: Karim",
+    nom_saisi = st.text_input("Votre prénom", placeholder="Ex: Reda",
                                label_visibility="visible")
 
     col_ok, col_cancel = st.columns(2)
