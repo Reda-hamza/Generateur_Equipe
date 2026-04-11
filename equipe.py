@@ -24,7 +24,7 @@ st.markdown("""
     .stApp { background: linear-gradient(135deg, #0a1628, #0e2040, #0a1628); }
     .main-header { text-align: center; padding: 20px; }
     .main-header h1 {
-        font-size: 2.5rem; font-weight: 800;
+        font-size: 1.5rem; font-weight: 800;
         background: linear-gradient(135deg, #4a9eff, #a8d8ff);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
@@ -469,27 +469,6 @@ def main():
         if st.button("📤 ENVOYER TELEGRAM", use_container_width=True):
             dialog_envoi(generator, teams)
 
-    # ── Note d'information ────────────────────────────────────────────────────
-    st.markdown("""
-    <div style="
-        background: rgba(74,158,255,0.07);
-        border-left: 3px solid rgba(74,158,255,0.50);
-        border-radius: 0 10px 10px 0;
-        padding: 14px 18px;
-        margin: 18px 0 10px;
-        color: #a8d8ff;
-        font-size: 13.5px;
-        line-height: 1.6;
-    ">
-        ℹ️ L'application récupère la liste des joueurs ayant voté <strong>"oui"</strong>
-        sur le groupe Telegram, puis compose les équipes en essayant de les équilibrer
-        au maximum.<br>
-        Si vous souhaitez ajouter un joueur, commentez dans le groupe avec le signe
-        <strong>"+"</strong> suivi du nom du joueur (exemple : <strong>+Kamel</strong>),
-        et ce <strong>au moins une heure avant</strong> de lancer l'application.
-    </div>
-    """, unsafe_allow_html=True)
-
     # ── Listes joueurs ────────────────────────────────────────────────────────
     col1, col2 = st.columns(2)
 
@@ -526,7 +505,7 @@ def main():
             """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div class="footer">⚽ Team Generator Pro — Génération équilibrée automatique</div>
+    <div class="footer">⚽ Generator Pro — Génération équilibrée automatique</div>
     """, unsafe_allow_html=True)
 
 
