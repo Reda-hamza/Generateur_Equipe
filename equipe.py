@@ -416,8 +416,7 @@ def dialog_envoi(generator, teams):
 def main():
     st.markdown("""
     <div class="main-header">
-        <h1>⚽ TEAM GENERATOR PRO ⚽</h1>
-        <p style="font-size:16px; color:#7fb3f5; margin-top:4px;">Génération automatique et équilibrée</p>
+        <h1>⚽ BRFOOT GENERATOR ⚽</h1
     </div>
     """, unsafe_allow_html=True)
 
