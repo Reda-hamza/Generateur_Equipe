@@ -24,7 +24,7 @@ st.markdown("""
     .stApp { background: linear-gradient(135deg, #0a1628, #0e2040, #0a1628); }
     .main-header { text-align: center; padding: 20px; }
     .main-header h1 {
-        font-size: 1.5rem; font-weight: 800;
+        font-size: 1.2rem; font-weight: 800;
         background: linear-gradient(135deg, #4a9eff, #a8d8ff);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
