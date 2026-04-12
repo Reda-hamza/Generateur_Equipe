@@ -24,7 +24,7 @@ st.markdown("""
     .stApp { background: linear-gradient(135deg, #0a1628, #0e2040, #0a1628); }
     .main-header { text-align: center; padding: 20px; }
     .main-header h1 {
-        font-size: 1.2rem; font-weight: 800;
+        font-size: 1.8rem; font-weight: 800;
         background: linear-gradient(135deg, #4a9eff, #a8d8ff);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
@@ -65,6 +65,13 @@ st.markdown("""
     .num-red   { background: #e74c3c; color: white; }
     .num-green { background: #27ae60; color: white; }
     .footer { text-align: center; color: rgba(74,158,255,0.35); padding: 20px; font-size: 12px; }
+     
+     #MainMenu         { visibility: hidden; }   /* menu hamburger ☰ */
+    header            { visibility: hidden; }   /* barre du haut entière */
+    footer            { visibility: hidden; }   /* "Made with Streamlit" en bas */
+    [data-testid="stToolbar"]         { display: none !important; }
+    [data-testid="manage-app-button"] { display: none !important; }  /* bouton Manage app */
+    .stDeployButton                   { display: none !important; }  /* bouton Deploy */
 </style>
 """, unsafe_allow_html=True)
 
@@ -101,7 +108,7 @@ def _draw_jersey(ax, cx, cy, name, color, s=0.056):
     hw = s * 0.82
     bw = s * 1.00
     sw = s * 0.50
-    sh = s * 0.34
+    sh = s * 0.60
     my = cy + h * 0.16
     MV, LN, CL = Path.MOVETO, Path.LINETO, Path.CLOSEPOLY
 
@@ -126,7 +133,7 @@ def _draw_jersey(ax, cx, cy, name, color, s=0.056):
 
     short = name[:8] + "." if len(name) > 8 else name
     ax.text(cx, cy - h/2 - 0.022, short,
-            ha='center', va='top', fontsize=10, fontweight='bold',
+            ha='center', va='top', fontsize=14, fontweight='bold',
             color='white', zorder=8,
             path_effects=[pe.withStroke(linewidth=2.2, foreground='black')])
 
@@ -423,17 +430,6 @@ def main():
     if 'generator' not in st.session_state:
         st.session_state.generator = TeamGenerator()
     generator = st.session_state.generator
-
-    if 'user_name' not in st.session_state:
-        st.session_state.user_name = st.query_params.get("user", "Joueur")
-
-    _, col_c, _ = st.columns([1, 2, 1])
-    with col_c:
-        st.markdown(f"""
-        <div style="text-align:center; margin-bottom:14px;">
-            <span class="user-badge">👋 Bienvenue, <strong>{st.session_state.user_name}</strong></span>
-        </div>
-        """, unsafe_allow_html=True)
 
     if 'current_teams' not in st.session_state:
         with st.spinner("🎲 Chargement des joueurs..."):
