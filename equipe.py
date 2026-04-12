@@ -107,8 +107,8 @@ def _draw_jersey(ax, cx, cy, name, color, s=0.056):
     h  = s * 1.30
     hw = s * 0.82
     bw = s * 1.00
-    sw = s * 0.50
-    sh = s * 0.60
+    sw = s * 0.55
+    sh = s * 0.90
     my = cy + h * 0.16
     MV, LN, CL = Path.MOVETO, Path.LINETO, Path.CLOSEPOLY
 
@@ -377,6 +377,7 @@ def _get_or_build_image() -> bytes:
         st.session_state.lineup_img = generate_lineup_image(
             teams['team_a'], teams['team_b'],
             teams['score_a'], teams['score_b'],
+            2day = 
             week_label=f"Semaine {week} - {datetime.now().strftime('%d/%m/%Y')}"
         )
     return st.session_state.lineup_img
