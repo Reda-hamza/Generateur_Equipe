@@ -66,12 +66,12 @@ st.markdown("""
     .num-green { background: #27ae60; color: white; }
     .footer { text-align: center; color: rgba(74,158,255,0.35); padding: 20px; font-size: 12px; }
      
-     #MainMenu         { visibility: hidden; }   /* menu hamburger ☰ */
-    header            { visibility: hidden; }   /* barre du haut entière */
-    footer            { visibility: hidden; }   /* "Made with Streamlit" en bas */
+     #MainMenu         { visibility: hidden; }
+    header            { visibility: hidden; }
+    footer            { visibility: hidden; }
     [data-testid="stToolbar"]         { display: none !important; }
-    [data-testid="manage-app-button"] { display: none !important; }  /* bouton Manage app */
-    .stDeployButton                   { display: none !important; }  /* bouton Deploy */
+    [data-testid="manage-app-button"] { display: none !important; }
+    .stDeployButton                   { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -164,18 +164,25 @@ def _draw_pitch(ax):
 
 def generate_lineup_image(team_a: list, team_b: list,
                            score_a: int, score_b: int,
-                           week_label: str = "") -> bytes:
+                           week_label: str = "",
+                           user_name: str = "",
+                           remaining_sessions: int = 0) -> bytes:
     fig = plt.figure(figsize=(6.5, 11), facecolor=_BG, dpi=160)
 
+    # En-tête avec COMPOSITION + date
     ax_h = fig.add_axes([0, 0.915, 1, 0.085])
     ax_h.set_xlim(0,1); ax_h.set_ylim(0,1); ax_h.axis('off')
     ax_h.set_facecolor(_BG)
-    ax_h.text(.5, .65, "COMPOSITION",
-              ha='center', va='center', fontsize=19, fontweight='bold', color='white')
-    ax_h.text(.5, .18,
-              week_label or datetime.now().strftime("%d/%m/%Y"),
-              ha='center', va='center', fontsize=8, color='#7fb3f5')
+    date_str = week_label or datetime.now().strftime("%d/%m/%Y")
+    ax_h.text(.5, .65, f"COMPOSITION DU {date_str}",
+              ha='center', va='center', fontsize=16, fontweight='bold', color='white')
+    
+     # Ligne "Généré par : [user_name]"
+    if user_name:
+        ax_h.text(.5, .18, f"Généré par : {user_name}",
+                ha='center', va='center', fontsize=11, color='#7fb3f5')
 
+   
     ax = fig.add_axes([0.04, 0.085, 0.92, 0.83])
     ax.set_xlim(0,1); ax.set_ylim(0,1); ax.axis('off')
     _draw_pitch(ax)
@@ -284,7 +291,10 @@ class TeamGenerator:
         joueurs_restants = {}
 
         linked_up = [p.upper().strip() for p in linked_players]
-        for nom in players_list:
+        players_list_copy = players_list.copy()
+        random.shuffle(players_list_copy) 
+    
+        for nom in players_list_copy:
             if nom.upper().strip() in linked_up:
                 team_a.append(nom)
             else:
@@ -292,7 +302,7 @@ class TeamGenerator:
 
         inv_idx = 1
         while (len(team_a) + len(team_b) + len(joueurs_restants)) < 12:
-            joueurs_restants[f"Manque_jr {inv_idx}"] = 0
+            joueurs_restants[f"À_Compléter {inv_idx}"] = 0
             inv_idx += 1
 
         for nom, _ in sorted(joueurs_restants.items(), key=lambda x: x[1], reverse=True):
@@ -323,24 +333,16 @@ class TeamGenerator:
         return max(0, total_mercredis - mercredis_passes) + 4
 
     async def send_to_telegram(self, teams_data: dict, user_name: str,
-                                img_bytes: bytes = None) -> bool:
+                                img_bytes: bytes = None, remaining_sessions: int = 0) -> bool:
         bot_token = st.secrets["telegram"]["bot_token"]
         chat_id   = st.secrets["telegram"]["chat_id"]
         try:
-            bot        = Bot(token=bot_token)
-            date_str   = datetime.now().strftime('%d/%m/%Y %H:%M')
-            rouge_list = "\n".join(f"  {i}. {p}"
-                                   for i, p in enumerate(teams_data['team_a'][:6], 1))
-            verte_list = "\n".join(f"  {i}. {p}"
-                                   for i, p in enumerate(teams_data['team_b'][:6], 1))
-            date_debut = datetime(2025, 4, 23).date()
-            restants   = self.compter_mercredis_restants(date_debut)
-
-            caption = (
-                f"Composition du {date_str}\n"
-                f"Genere par : {user_name}\n\n"
-                f"{restants} Seances Restantes"
-            )
+            bot = Bot(token=bot_token)
+            date_str = datetime.now().strftime('%d/%m/%Y %H:%M')
+            
+            # Légende Telegram : seulement "Généré par : [nom]" + séances restantes
+            caption = f"{remaining_sessions} Séances Restantes"
+            
             if img_bytes:
                 await bot.send_photo(chat_id=chat_id,
                                      photo=io.BytesIO(img_bytes),
@@ -370,14 +372,16 @@ def _load_teams(generator: TeamGenerator) -> bool:
     return True
 
 
-def _get_or_build_image() -> bytes:
+def _get_or_build_image(user_name: str = "", remaining_sessions: int = 0) -> bytes:
     if 'lineup_img' not in st.session_state:
         teams = st.session_state.current_teams
         week  = teams.get('week', datetime.now().isocalendar()[1])
         st.session_state.lineup_img = generate_lineup_image(
             teams['team_a'], teams['team_b'],
             teams['score_a'], teams['score_b'],
-            week_label=f"Semaine {week} - {datetime.now().strftime('%d/%m/%Y')}"
+            week_label=f"{datetime.now().strftime('%d/%m/%Y')}",
+            user_name=user_name,
+            remaining_sessions=remaining_sessions
         )
     return st.session_state.lineup_img
 
@@ -397,13 +401,17 @@ def dialog_envoi(generator, teams):
 
     col_ok, col_cancel = st.columns(2)
     with col_ok:
-        if st.button("✅ Confirmer & Envoyer", use_container_width=True, type="primary"):
+        if st.button("✅ Confirmer", use_container_width=True, type="primary"):
             if nom_saisi.strip():
+                # Calcul des séances restantes
+                date_debut = datetime(2025, 4, 23).date()
+                restants = generator.compter_mercredis_restants(date_debut)
+                
                 with st.spinner("Génération de l'image..."):
-                    img = _get_or_build_image()
+                    img = _get_or_build_image(nom_saisi.strip(), restants)
                 with st.spinner("Envoi sur Telegram..."):
                     ok = asyncio.run(generator.send_to_telegram(
-                        teams, nom_saisi.strip(), img
+                        teams, nom_saisi.strip(), img, restants
                     ))
                 st.session_state.pop('lineup_img', None)
                 if ok:
@@ -423,7 +431,7 @@ def dialog_envoi(generator, teams):
 def main():
     st.markdown("""
     <div class="main-header">
-        <h1>⚽ BRFOOT GENERATOR ⚽</h1
+        <h1>⚽ FOOT5 GENERATOR ⚽</h1>
     </div>
     """, unsafe_allow_html=True)
 
@@ -460,7 +468,6 @@ def main():
                     st.error("❌ Erreur de chargement")
 
     with c3:
-        # Un seul clic ouvre la vraie fenêtre modale
         if st.button("📤 ENVOYER TELEGRAM", use_container_width=True):
             dialog_envoi(generator, teams)
 
