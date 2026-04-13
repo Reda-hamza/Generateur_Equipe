@@ -377,7 +377,6 @@ def _get_or_build_image() -> bytes:
         st.session_state.lineup_img = generate_lineup_image(
             teams['team_a'], teams['team_b'],
             teams['score_a'], teams['score_b'],
-            2day = 
             week_label=f"Semaine {week} - {datetime.now().strftime('%d/%m/%Y')}"
         )
     return st.session_state.lineup_img
