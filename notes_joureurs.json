@@ -1,10 +1,10 @@
 {
-"Amine": 5,
+"Amine": 6,
   "Anis": 4,
   "Bouchatal": 2,
   "Briki": 3,
   "Chrif": 6,
-  "Dahlab":4,
+  "Dahlab":3.8,
   "djaoui": 5,
   "guir": 3,
   "Hakim": 5,
@@ -25,13 +25,16 @@
   "Riad": 5,
   "Samir": 4.5,
   "Sofiane": 4,
-  "Tarek": 6,
+  "Tarek": 5,
   "Touati": 3,
   "Yahi": 5,
   "Yahouni": 4,
   "Yassine": 2,
   "Yataghane": 6,
   "Yazid": 5,
-  "Youssef": 3.8,
-  "Zahi": 6
+  "Youssef": 4,
+  "Zahi": 6,
+  "Fares":4,
+  "Loucif":2,
+  "Mounir":3
 }
