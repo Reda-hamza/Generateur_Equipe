@@ -5,6 +5,9 @@ import gspread
 import io
 import asyncio
 from datetime import date, timedelta, datetime
+from zoneinfo import ZoneInfo
+
+TZ_ALGER = ZoneInfo('Africa/Algiers')   # UTC+1
 from telegram import Bot
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -117,8 +120,8 @@ def _draw_jersey(ax, cx, cy, name, color, s=0.056):
     h  = s * 1.30
     hw = s * 0.82
     bw = s * 1.00
-    sw = s * 0.50
-    sh = s * 0.34
+    sw = s * 0.55
+    sh = s * 0.90
     my = cy + h * 0.16
     MV, LN, CL = Path.MOVETO, Path.LINETO, Path.CLOSEPOLY
 
@@ -166,23 +169,40 @@ def _draw_pitch(ax):
     ax.plot(.50,.89, 'o', color=_LINE_C, ms=3, zorder=2, alpha=0.72)
 
 
-def generate_lineup_image(team_a, team_b, score_a, score_b, week_label="") -> bytes:
+def generate_lineup_image(team_a: list, team_b: list,
+                           score_a: int, score_b: int,
+                           week_label: str = "",
+                           user_name: str = "",
+                           remaining_sessions: int = 0) -> bytes:
     fig = plt.figure(figsize=(6.5, 11), facecolor=_BG, dpi=160)
+
+    # En-tête avec COMPOSITION + date
     ax_h = fig.add_axes([0, 0.915, 1, 0.085])
     ax_h.set_xlim(0,1); ax_h.set_ylim(0,1); ax_h.axis('off')
     ax_h.set_facecolor(_BG)
-    ax_h.text(.5, .65, "COMPOSITION", ha='center', va='center',
-              fontsize=19, fontweight='bold', color='white')
-    ax_h.text(.5, .18, week_label or datetime.now().strftime("%d/%m/%Y"),
-              ha='center', va='center', fontsize=8, color='#7fb3f5')
+    date_str = datetime.now().strftime("%d/%m/%Y")
+    ax_h.text(.5, .65, f"COMPOSITION DU {date_str}",
+              ha='center', va='center', fontsize=16, fontweight='bold', color='white')
+    
+     # Ligne "Généré par : [user_name]"
+    if user_name:
+        ax_h.text(.5, .18, f"Généré par : {user_name}",
+                ha='center', va='center', fontsize=11, color='#7fb3f5')
+
+   
     ax = fig.add_axes([0.04, 0.085, 0.92, 0.83])
     ax.set_xlim(0,1); ax.set_ylim(0,1); ax.axis('off')
     _draw_pitch(ax)
-    for (x,y), name in zip(_POS_RED, team_a): _draw_jersey(ax, x, y, name, _RED_C)
-    for (x,y), name in zip(_POS_GRN, team_b): _draw_jersey(ax, x, y, name, _GRN_C)
+
+    for (x,y), name in zip(_POS_RED, team_a):
+        _draw_jersey(ax, x, y, name, _RED_C)
+    for (x,y), name in zip(_POS_GRN, team_b):
+        _draw_jersey(ax, x, y, name, _GRN_C)
+
     ax_f = fig.add_axes([0, 0, 1, 0.085])
     ax_f.set_xlim(0,1); ax_f.set_ylim(0,1); ax_f.axis('off')
     ax_f.set_facecolor("#060f1c")
+
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=160, bbox_inches='tight', facecolor=_BG)
     plt.close(fig)
@@ -332,7 +352,7 @@ class TeamGenerator:
             if ws is None:
                 return False, ""
             rows = ws.get_all_values()
-            today_str = datetime.now().strftime("%Y-%m-%d")
+            today_str = datetime.now(TZ_ALGER).strftime("%Y-%m-%d")
             for row in rows[1:]:   # ignorer l'en-tête
                 if row and row[0].strip() == today_str:
                     envoyeur = row[2].strip() if len(row) > 2 else "Anonyme"
@@ -351,8 +371,8 @@ class TeamGenerator:
             rouge = ", ".join(teams_data['team_a'][:6])
             verte = ", ".join(teams_data['team_b'][:6])
             ws.append_row([
-                datetime.now().strftime("%Y-%m-%d"),
-                datetime.now().strftime("%H:%M:%S"),
+                datetime.now(TZ_ALGER).strftime("%Y-%m-%d"),
+                datetime.now(TZ_ALGER).strftime("%H:%M:%S"),
                 user_name,
                 rouge,
                 verte,
@@ -376,7 +396,7 @@ class TeamGenerator:
             rouge = ", ".join(teams_data['team_a'][:6]) if teams_data else ""
             verte = ", ".join(teams_data['team_b'][:6]) if teams_data else ""
             ws.append_row([
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                datetime.now(TZ_ALGER).strftime("%Y-%m-%d %H:%M:%S"),
                 action,
                 user_name,
                 rouge,
@@ -414,10 +434,7 @@ class TeamGenerator:
             date_debut = datetime(2025, 4, 23).date()
             restants   = self.compter_mercredis_restants(date_debut)
             caption = (
-                f"Composition du {date_str}\n"
-                f"Genere par : {user_name}\n\n"
-                f"ROUGE ({teams_data['score_a']} pts) :\n{rouge_list}\n\n"
-                f"VERTE ({teams_data['score_b']} pts) :\n{verte_list}\n\n"
+                f"Genere par : {user_name}\n"
                 f"{restants} Seances Restantes"
             )
             if img_bytes:
@@ -470,17 +487,38 @@ def _get_or_build_image() -> bytes:
 def dialog_envoi(generator: TeamGenerator, teams: dict):
     """
     Fenêtre modale d'envoi :
+    - Autorisé uniquement le mercredi
     - Nom optionnel (vide = Anonyme)
-    - Vérifie si quelqu'un a déjà envoyé aujourd'hui
+    - Vérifie si quelqu'un a déjà envoyé ce mercredi
     - Logue l'envoi dans EnvoiLog et UsageLogs
     """
-    # Vérification blocage du jour
-    deja_envoye, envoyeur_du_jour = generator.check_envoi_today()
+    # Heure locale Algérie (UTC+1) — important pour weekday() correct
+    aujourd_hui = datetime.now(TZ_ALGER)
 
+    # Vérification 1 : on est bien mercredi (weekday == 2)
+    if aujourd_hui.weekday() != 2:
+        jours_fr = ["lundi", "mardi", "mercredi", "jeudi",
+                    "vendredi", "samedi", "dimanche"]
+        jour_actuel = jours_fr[aujourd_hui.weekday()]
+        jours_avant_mercredi = (2 - aujourd_hui.weekday()) % 7
+        prochain_mercredi = (aujourd_hui + timedelta(days=jours_avant_mercredi)).strftime("%d/%m/%Y")
+        st.markdown(f"""
+        <div class="blocked-banner">
+            📅 L'envoi est autorisé <strong>uniquement le mercredi</strong>.<br>
+            Aujourd'hui c'est <strong>{jour_actuel}</strong> —
+            prochain mercredi le <strong>{prochain_mercredi}</strong>.
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("✖ Fermer", use_container_width=True):
+            st.rerun()
+        return
+
+    # Vérification 2 : personne n'a encore envoyé ce mercredi
+    deja_envoye, envoyeur_du_jour = generator.check_envoi_today()
     if deja_envoye:
         st.markdown(f"""
         <div class="blocked-banner">
-            🔒 La composition a déjà été envoyée aujourd'hui par
+            🔒 La composition a déjà été envoyée ce mercredi par
             <strong>{envoyeur_du_jour}</strong>.<br>
             Un seul envoi est autorisé par mercredi.
         </div>
@@ -530,7 +568,7 @@ def dialog_envoi(generator: TeamGenerator, teams: dict):
 def main():
     st.markdown("""
     <div class="main-header">
-        <h1>⚽ TEAM GENERATOR PRO ⚽</h1>
+        <h1>⚽ BRFOOT COMPOSITION ⚽</h1>
         <p style="font-size:16px; color:#7fb3f5; margin-top:4px;">Génération automatique et équilibrée</p>
     </div>
     """, unsafe_allow_html=True)
@@ -543,13 +581,6 @@ def main():
     if 'user_name' not in st.session_state:
         st.session_state.user_name = st.query_params.get("user", "Anonyme")
 
-    _, col_c, _ = st.columns([1, 2, 1])
-    with col_c:
-        st.markdown(f"""
-        <div style="text-align:center; margin-bottom:14px;">
-            <span class="user-badge">👋 Bienvenue, <strong>{st.session_state.user_name}</strong></span>
-        </div>
-        """, unsafe_allow_html=True)
 
     # Chargement initial
     if 'current_teams' not in st.session_state:
@@ -594,12 +625,8 @@ def main():
         padding: 14px 18px; margin: 18px 0 10px;
         color: #a8d8ff; font-size: 13.5px; line-height: 1.6;
     ">
-        ℹ️ L'application récupère la liste des joueurs ayant voté <strong>"oui"</strong>
-        sur le groupe Telegram, puis compose les équipes en essayant de les équilibrer
-        au maximum.<br>
-        Si vous souhaitez ajouter un joueur, commentez dans le groupe avec le signe
-        <strong>"+"</strong> suivi du nom du joueur (exemple : <strong>+Kamel</strong>),
-        et ce <strong>au moins une heure avant</strong> de lancer l'application.
+        ℹ️ Vous pouvez régénérer la composition plusieurs fois. Une fois que vous avez fait votre choix final, vous devez l’envoyer sur Telegram. Après envoi, aucune autre composition ne pourra être soumise.
+.
     </div>
     """, unsafe_allow_html=True)
 
@@ -639,7 +666,7 @@ def main():
             """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div class="footer">⚽ Team Generator Pro — Génération équilibrée automatique</div>
+    <div class="footer">⚽ BRFOOT Generator Pro — Génération équilibrée automatique</div>
     """, unsafe_allow_html=True)
 
 
