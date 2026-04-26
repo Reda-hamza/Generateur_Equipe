@@ -17,14 +17,22 @@ from matplotlib.path import Path
 import matplotlib.patheffects as pe
 
 # ─── Config page ──────────────────────────────────────────────────────────────
-st.set_page_config(page_title="⚽ Brfoot Generator", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="⚽ Team Generator Pro", page_icon="⚽", layout="wide")
 
 st.markdown("""
 <style>
+    /* ── Masquer éléments Streamlit natifs ── */
+    #MainMenu         { visibility: hidden; }
+    header            { visibility: hidden; }
+    footer            { visibility: hidden; }
+    [data-testid="stToolbar"]          { display: none !important; }
+    [data-testid="manage-app-button"]  { display: none !important; }
+    .stDeployButton                    { display: none !important; }
+
     .stApp { background: linear-gradient(135deg, #0a1628, #0e2040, #0a1628); }
     .main-header { text-align: center; padding: 20px; }
     .main-header h1 {
-        font-size: 1.8rem; font-weight: 800;
+        font-size: 2.5rem; font-weight: 800;
         background: linear-gradient(135deg, #4a9eff, #a8d8ff);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
@@ -65,13 +73,11 @@ st.markdown("""
     .num-red   { background: #e74c3c; color: white; }
     .num-green { background: #27ae60; color: white; }
     .footer { text-align: center; color: rgba(74,158,255,0.35); padding: 20px; font-size: 12px; }
-     
-     #MainMenu         { visibility: hidden; }
-    header            { visibility: hidden; }
-    footer            { visibility: hidden; }
-    [data-testid="stToolbar"]         { display: none !important; }
-    [data-testid="manage-app-button"] { display: none !important; }
-    .stDeployButton                   { display: none !important; }
+    .blocked-banner {
+        background: rgba(231,76,60,0.15); border: 1px solid rgba(231,76,60,0.5);
+        border-radius: 12px; padding: 14px 20px; margin: 10px 0;
+        color: #ff8a80; font-size: 14px; text-align: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -100,6 +106,10 @@ _POS_GRN = [
     (0.50, 0.70),   # ATT
 ]
 
+# ─── Noms des feuilles Sheets ─────────────────────────────────────────────────
+_SHEET_ENVOI = "EnvoiLog"    # blocage envoi unique par mercredi
+_SHEET_LOGS  = "UsageLogs"  # historique d'utilisation
+
 
 # ─── Dessin maillot ───────────────────────────────────────────────────────────
 
@@ -107,8 +117,8 @@ def _draw_jersey(ax, cx, cy, name, color, s=0.056):
     h  = s * 1.30
     hw = s * 0.82
     bw = s * 1.00
-    sw = s * 0.55
-    sh = s * 0.90
+    sw = s * 0.50
+    sh = s * 0.34
     my = cy + h * 0.16
     MV, LN, CL = Path.MOVETO, Path.LINETO, Path.CLOSEPOLY
 
@@ -116,24 +126,20 @@ def _draw_jersey(ax, cx, cy, name, color, s=0.056):
           (cx+bw, cy-h/2), (cx-bw, cy-h/2), (cx-hw, cy+h/2)]
     ax.add_patch(PathPatch(Path(vb, [MV,LN,LN,LN,CL]),
                            fc=color, ec='white', lw=0.9, zorder=5, alpha=0.95))
-
     vl = [(cx-hw, my+sh*.5), (cx-hw-sw, my),
           (cx-hw-sw*.6, my-sh*.6), (cx-hw, my-sh*.3), (cx-hw, my+sh*.5)]
     ax.add_patch(PathPatch(Path(vl, [MV,LN,LN,LN,CL]),
                            fc=color, ec='white', lw=0.9, zorder=4, alpha=0.95))
-
     vr = [(cx+hw, my+sh*.5), (cx+hw+sw, my),
           (cx+hw+sw*.6, my-sh*.6), (cx+hw, my-sh*.3), (cx+hw, my+sh*.5)]
     ax.add_patch(PathPatch(Path(vr, [MV,LN,LN,LN,CL]),
                            fc=color, ec='white', lw=0.9, zorder=4, alpha=0.95))
-
     ax.add_patch(patches.Arc((cx, cy+h/2), hw*0.55, h*0.24,
                               angle=0, theta1=180, theta2=360,
                               color='white', lw=1.3, zorder=6))
-
     short = name[:8] + "." if len(name) > 8 else name
     ax.text(cx, cy - h/2 - 0.022, short,
-            ha='center', va='top', fontsize=14, fontweight='bold',
+            ha='center', va='top', fontsize=10, fontweight='bold',
             color='white', zorder=8,
             path_effects=[pe.withStroke(linewidth=2.2, foreground='black')])
 
@@ -143,11 +149,9 @@ def _draw_pitch(ax):
     for i in range(6):
         if i % 2 == 0:
             ax.add_patch(patches.Rectangle((0, i/6), 1, 1/6, color=_PITCH_L, zorder=0))
-
     lw = 1.5
     kw = dict(color=_LINE_C, lw=lw, zorder=2, alpha=0.72)
     def l(x0, y0, x1, y1): ax.plot([x0,x1], [y0,y1], **kw)
-
     l(.04,.02,.96,.02); l(.96,.02,.96,.98)
     l(.96,.98,.04,.98); l(.04,.98,.04,.02)
     l(.04,.50,.96,.50)
@@ -162,40 +166,23 @@ def _draw_pitch(ax):
     ax.plot(.50,.89, 'o', color=_LINE_C, ms=3, zorder=2, alpha=0.72)
 
 
-def generate_lineup_image(team_a: list, team_b: list,
-                           score_a: int, score_b: int,
-                           week_label: str = "",
-                           user_name: str = "",
-                           remaining_sessions: int = 0) -> bytes:
+def generate_lineup_image(team_a, team_b, score_a, score_b, week_label="") -> bytes:
     fig = plt.figure(figsize=(6.5, 11), facecolor=_BG, dpi=160)
-
-    # En-tête avec COMPOSITION + date
     ax_h = fig.add_axes([0, 0.915, 1, 0.085])
     ax_h.set_xlim(0,1); ax_h.set_ylim(0,1); ax_h.axis('off')
     ax_h.set_facecolor(_BG)
-    date_str = week_label or datetime.now().strftime("%d/%m/%Y")
-    ax_h.text(.5, .65, f"COMPOSITION DU {date_str}",
-              ha='center', va='center', fontsize=16, fontweight='bold', color='white')
-    
-     # Ligne "Généré par : [user_name]"
-    if user_name:
-        ax_h.text(.5, .18, f"Généré par : {user_name}",
-                ha='center', va='center', fontsize=11, color='#7fb3f5')
-
-   
+    ax_h.text(.5, .65, "COMPOSITION", ha='center', va='center',
+              fontsize=19, fontweight='bold', color='white')
+    ax_h.text(.5, .18, week_label or datetime.now().strftime("%d/%m/%Y"),
+              ha='center', va='center', fontsize=8, color='#7fb3f5')
     ax = fig.add_axes([0.04, 0.085, 0.92, 0.83])
     ax.set_xlim(0,1); ax.set_ylim(0,1); ax.axis('off')
     _draw_pitch(ax)
-
-    for (x,y), name in zip(_POS_RED, team_a):
-        _draw_jersey(ax, x, y, name, _RED_C)
-    for (x,y), name in zip(_POS_GRN, team_b):
-        _draw_jersey(ax, x, y, name, _GRN_C)
-
+    for (x,y), name in zip(_POS_RED, team_a): _draw_jersey(ax, x, y, name, _RED_C)
+    for (x,y), name in zip(_POS_GRN, team_b): _draw_jersey(ax, x, y, name, _GRN_C)
     ax_f = fig.add_axes([0, 0, 1, 0.085])
     ax_f.set_xlim(0,1); ax_f.set_ylim(0,1); ax_f.axis('off')
     ax_f.set_facecolor("#060f1c")
-
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=160, bbox_inches='tight', facecolor=_BG)
     plt.close(fig)
@@ -218,18 +205,19 @@ class TeamGenerator:
     def load_notes(self):
         try:
             with open('notes_joureurs.json', 'r', encoding='utf-8') as f:
-                self.notes_dict = {k.upper().strip(): int(v) for k, v in json.load(f).items()}
+                self.notes_dict = {k.upper().strip(): int(v)
+                                   for k, v in json.load(f).items()}
         except FileNotFoundError:
             self.notes_dict = {}
 
     def _get_spreadsheet(self):
+        """Connexion OAuth + spreadsheet — une seule fois par instance."""
         if self.spreadsheet is None:
             try:
                 scope = ["https://spreadsheets.google.com/feeds",
                          "https://www.googleapis.com/auth/drive"]
                 creds = ServiceAccountCredentials.from_json_keyfile_dict(
-                    self._gsheet_creds, scope
-                )
+                    self._gsheet_creds, scope)
                 self.client      = gspread.authorize(creds)
                 self.spreadsheet = self.client.open_by_key(self.spreadsheet_id)
             except Exception as e:
@@ -237,7 +225,22 @@ class TeamGenerator:
                 return None
         return self.spreadsheet
 
+    def _get_or_create_sheet(self, name: str, headers: list):
+        """Retourne la feuille 'name', la crée avec les en-têtes si absente."""
+        ss = self._get_spreadsheet()
+        if ss is None:
+            return None
+        try:
+            return ss.worksheet(name)
+        except gspread.WorksheetNotFound:
+            ws = ss.add_worksheet(title=name, rows=1000, cols=len(headers))
+            ws.append_row(headers)
+            return ws
+
+    # ── Lecture présences + config ────────────────────────────────────────────
+
     def fetch_all_data(self, target_week: str):
+        """Lit présences + linked_players en un seul bloc réseau."""
         ss = self._get_spreadsheet()
         if ss is None:
             return [], []
@@ -247,15 +250,232 @@ class TeamGenerator:
             all_values = ss.sheet1.get_all_values()
             if all_values:
                 headers = [h.strip().lower() for h in all_values[0]]
-                idx_sem = next((i for i, h in enumerate(headers) if "semaine" in h), -1)
-                idx_pre = next((i for i, h in enumerate(headers) if "pres"    in h), -1)
-                idx_nom = next((i for i, h in enumerate(headers) if "prenom"  in h), -1)
+                idx_sem = next((i for i,h in enumerate(headers) if "semaine" in h), -1)
+                idx_pre = next((i for i,h in enumerate(headers) if "pres"    in h), -1)
+                idx_nom = next((i for i,h in enumerate(headers) if "prenom"  in h), -1)
                 if -1 not in [idx_sem, idx_pre, idx_nom]:
                     target_lower = target_week.lower().strip()
                     for row in all_values[1:]:
                         if len(row) <= max(idx_sem, idx_pre, idx_nom):
                             continue
                         if row[idx_sem].strip().lower() != target_lower:
+                            continue
+                        if row[idx_pre].strip().lower() not in ["present","présent"]:
+                            continue
+                        prenom = row[idx_nom].strip().upper()
+                        if prenom:
+                            if "+" in prenom:
+                                present_players.extend(
+                                    [n.strip() for n in prenom.split("+") if n.strip()])
+                            else:
+                                present_players.append(prenom)
+            seen = set()
+            present_players = [x for x in present_players
+                                if not (x in seen or seen.add(x))]
+        except Exception as e:
+            st.error(f"Erreur lecture présences: {e}")
+
+        linked = []
+        try:
+            cfg_ws = ss.worksheet("Configuration")
+            for row in cfg_ws.get_all_values():
+                if len(row) >= 2 and row[0].strip().lower() == "linked_players":
+                    linked = [p.strip().upper() for p in row[1].split(",") if p.strip()]
+                    break
+        except gspread.WorksheetNotFound:
+            pass
+        except Exception as e:
+            st.warning(f"Erreur lecture Configuration: {e}")
+
+        return present_players, linked
+
+    # ── Génération équipes ────────────────────────────────────────────────────
+
+    def generate_teams(self, players_list: list, linked_players: list):
+        team_a, team_b   = [], []
+        joueurs_restants = {}
+        linked_up = [p.upper().strip() for p in linked_players]
+        for nom in players_list:
+            if nom.upper().strip() in linked_up:
+                team_a.append(nom)
+            else:
+                joueurs_restants[nom] = self.notes_dict.get(nom.upper().strip(), 0)
+        inv_idx = 1
+        while (len(team_a) + len(team_b) + len(joueurs_restants)) < 12:
+            joueurs_restants[f"Manque_jr {inv_idx}"] = 0
+            inv_idx += 1
+        for nom, _ in sorted(joueurs_restants.items(), key=lambda x: x[1], reverse=True):
+            sa = sum(self.notes_dict.get(n.upper(), 0) for n in team_a)
+            sb = sum(self.notes_dict.get(n.upper(), 0) for n in team_b)
+            if len(team_a) < 6 and (sa <= sb or len(team_b) >= 6):
+                team_a.append(nom)
+            elif len(team_b) < 6:
+                team_b.append(nom)
+            else:
+                (team_a if len(team_a) < 6 else team_b).append(nom)
+        random.shuffle(team_a)
+        random.shuffle(team_b)
+        sa = sum(self.notes_dict.get(n.upper(), 0) for n in team_a)
+        sb = sum(self.notes_dict.get(n.upper(), 0) for n in team_b)
+        return team_a, team_b, sa, sb
+
+    # ── Blocage envoi unique par mercredi ─────────────────────────────────────
+
+    def check_envoi_today(self) -> tuple[bool, str]:
+        """
+        Vérifie si une composition a déjà été envoyée aujourd'hui.
+        Retourne (deja_envoye: bool, nom_envoyeur: str).
+        """
+        try:
+            ws = self._get_or_create_sheet(
+                _SHEET_ENVOI, ["date", "heure", "envoyeur", "equipe_rouge", "equipe_verte"])
+            if ws is None:
+                return False, ""
+            rows = ws.get_all_values()
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            for row in rows[1:]:   # ignorer l'en-tête
+                if row and row[0].strip() == today_str:
+                    envoyeur = row[2].strip() if len(row) > 2 else "Anonyme"
+                    return True, envoyeur
+        except Exception as e:
+            st.warning(f"Impossible de vérifier EnvoiLog: {e}")
+        return False, ""
+
+    def log_envoi(self, user_name: str, teams_data: dict):
+        """Enregistre l'envoi dans la feuille EnvoiLog."""
+        try:
+            ws = self._get_or_create_sheet(
+                _SHEET_ENVOI, ["date", "heure", "envoyeur", "equipe_rouge", "equipe_verte"])
+            if ws is None:
+                return
+            rouge = ", ".join(teams_data['team_a'][:6])
+            verte = ", ".join(teams_data['team_b'][:6])
+            ws.append_row([
+                datetime.now().strftime("%Y-%m-%d"),
+                datetime.now().strftime("%H:%M:%S"),
+                user_name,
+                rouge,
+                verte,
+            ])
+        except Exception as e:
+            st.warning(f"Impossible d'écrire dans EnvoiLog: {e}")
+
+    # ── Logs d'utilisation ────────────────────────────────────────────────────
+
+    def log_usage(self, action: str, user_name: str, teams_data: dict = None):
+        """
+        Enregistre chaque action dans UsageLogs.
+        action : 'regeneration' | 'envoi_telegram'
+        """
+        try:
+            ws = self._get_or_create_sheet(
+                _SHEET_LOGS,
+                ["timestamp", "action", "utilisateur", "equipe_rouge", "equipe_verte"])
+            if ws is None:
+                return
+            rouge = ", ".join(teams_data['team_a'][:6]) if teams_data else ""
+            verte = ", ".join(teams_data['team_b'][:6]) if teams_data else ""
+            ws.append_row([
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                action,
+                user_name,
+                rouge,
+                verte,
+            ])
+        except Exception as e:
+            st.warning(f"Impossible d'écrire dans UsageLogs: {e}")
+
+    # ── Utilitaires ───────────────────────────────────────────────────────────
+
+    @staticmethod
+    def compter_mercredis_restants(date_debut, total_mercredis=52):
+        aujourdhui       = datetime.now().date()
+        mercredis_passes = 0
+        date_courante    = date_debut
+        while date_courante <= aujourdhui:
+            if date_courante.weekday() == 2:
+                mercredis_passes += 1
+            date_courante += timedelta(days=1)
+        return max(0, total_mercredis - mercredis_passes) + 4
+
+    # ── Envoi Telegram ────────────────────────────────────────────────────────
+
+    async def send_to_telegram(self, teams_data: dict, user_name: str,
+                                img_bytes: bytes = None) -> bool:
+        bot_token = st.secrets["telegram"]["bot_token"]
+        chat_id   = st.secrets["telegram"]["chat_id"]
+        try:
+            bot        = Bot(token=bot_token)
+            date_str   = datetime.now().strftime('%d/%m/%Y %H:%M')
+            rouge_list = "\n".join(f"  {i}. {p}"
+                                   for i,p in enumerate(teams_data['team_a'][:6], 1))
+            verte_list = "\n".join(f"  {i}. {p}"
+                                   for i,p in enumerate(teams_data['team_b'][:6], 1))
+            date_debut = datetime(2025, 4, 23).date()
+            restants   = self.compter_mercredis_restants(date_debut)
+            caption = (
+                f"Composition du {date_str}\n"
+                f"Genere par : {user_name}\n\n"
+                f"ROUGE ({teams_data['score_a']} pts) :\n{rouge_list}\n\n"
+                f"VERTE ({teams_data['score_b']} pts) :\n{verte_list}\n\n"
+                f"{restants} Seances Restantes"
+            )
+            if img_bytes:
+                await bot.send_photo(chat_id=chat_id,
+                                     photo=io.BytesIO(img_bytes),
+                                     caption=caption)
+            else:
+                await bot.send_message(chat_id=chat_id, text=caption)
+            return True
+        except Exception as e:
+            st.error(f"Erreur Telegram: {e}")
+            return False
+
+
+# ─── Helpers Streamlit ────────────────────────────────────────────────────────
+
+def _load_teams(generator: TeamGenerator, user_name: str = "Anonyme") -> bool:
+    current_week = datetime.now().isocalendar()[1]
+    players, linked = generator.fetch_all_data(f"Semaine {current_week}")
+    if not players:
+        return False
+    ta, tb, sa, sb = generator.generate_teams(players, linked)
+    st.session_state.current_teams = {
+        'team_a': ta, 'team_b': tb, 'score_a': sa, 'score_b': sb,
+        'week': current_week
+    }
+    st.session_state.players_list = players
+    st.session_state.pop('lineup_img', None)
+    # Log de la régénération (non bloquant)
+    generator.log_usage("regeneration", user_name,
+                         st.session_state.current_teams)
+    return True
+
+
+def _get_or_build_image() -> bytes:
+    if 'lineup_img' not in st.session_state:
+        teams = st.session_state.current_teams
+        week  = teams.get('week', datetime.now().isocalendar()[1])
+        st.session_state.lineup_img = generate_lineup_image(
+            teams['team_a'], teams['team_b'],
+            teams['score_a'], teams['score_b'],
+            week_label=f"Semaine {week} - {datetime.now().strftime('%d/%m/%Y')}"
+        )
+    return st.session_state.lineup_img
+
+
+# ─── Fenêtre modale ───────────────────────────────────────────────────────────
+
+@st.dialog("📤 Envoyer la composition")
+def dialog_envoi(generator: TeamGenerator, teams: dict):
+    """
+    Fenêtre modale d'envoi :
+    - Nom optionnel (vide = Anonyme)
+    - Vérifie si quelqu'un a déjà envoyé aujourd'hui
+    - Logue l'envoi dans EnvoiLog et UsageLogs
+    """
+    # Vérification blocage du jour
+    deja_envoye, envoyeur_trip().lower() != target_lower:
                             continue
                         if row[idx_pre].strip().lower() not in ["present", "présent"]:
                             continue
