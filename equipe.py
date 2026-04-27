@@ -8,6 +8,7 @@ from datetime import date, timedelta, datetime
 from zoneinfo import ZoneInfo
 
 TZ_ALGER = ZoneInfo('Africa/Algiers')   # UTC+1
+
 from telegram import Bot
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -110,8 +111,8 @@ _POS_GRN = [
 ]
 
 # ─── Noms des feuilles Sheets ─────────────────────────────────────────────────
-_SHEET_ENVOI = "EnvoiLog"    # blocage envoi unique par mercredi
-_SHEET_LOGS  = "UsageLogs"  # historique d'utilisation
+_SHEET_ENVOI = "EnvoiLog"
+_SHEET_LOGS  = "UsageLogs"
 
 
 # ─── Dessin maillot ───────────────────────────────────────────────────────────
@@ -172,24 +173,19 @@ def _draw_pitch(ax):
 def generate_lineup_image(team_a: list, team_b: list,
                            score_a: int, score_b: int,
                            week_label: str = "",
-                           user_name: str = "",
-                           remaining_sessions: int = 0) -> bytes:
+                           user_name: str = "") -> bytes:
     fig = plt.figure(figsize=(6.5, 11), facecolor=_BG, dpi=160)
 
-    # En-tête avec COMPOSITION + date
     ax_h = fig.add_axes([0, 0.915, 1, 0.085])
     ax_h.set_xlim(0,1); ax_h.set_ylim(0,1); ax_h.axis('off')
     ax_h.set_facecolor(_BG)
-    date_str = datetime.now().strftime("%d/%m/%Y")
+    date_str = datetime.now(TZ_ALGER).strftime("%d/%m/%Y")
     ax_h.text(.5, .65, f"COMPOSITION DU {date_str}",
               ha='center', va='center', fontsize=16, fontweight='bold', color='white')
-    
-     # Ligne "Généré par : [user_name]"
     if user_name:
-        ax_h.text(.5, .18, f"Généré par : {user_name}",
-                ha='center', va='center', fontsize=11, color='#7fb3f5')
+        ax_h.text(.5, .18, f"Generé par : {user_name}",
+                  ha='center', va='center', fontsize=11, color='#7fb3f5')
 
-   
     ax = fig.add_axes([0.04, 0.085, 0.92, 0.83])
     ax.set_xlim(0,1); ax.set_ylim(0,1); ax.axis('off')
     _draw_pitch(ax)
@@ -231,7 +227,6 @@ class TeamGenerator:
             self.notes_dict = {}
 
     def _get_spreadsheet(self):
-        """Connexion OAuth + spreadsheet — une seule fois par instance."""
         if self.spreadsheet is None:
             try:
                 scope = ["https://spreadsheets.google.com/feeds",
@@ -246,7 +241,6 @@ class TeamGenerator:
         return self.spreadsheet
 
     def _get_or_create_sheet(self, name: str, headers: list):
-        """Retourne la feuille 'name', la crée avec les en-têtes si absente."""
         ss = self._get_spreadsheet()
         if ss is None:
             return None
@@ -257,10 +251,7 @@ class TeamGenerator:
             ws.append_row(headers)
             return ws
 
-    # ── Lecture présences + config ────────────────────────────────────────────
-
     def fetch_all_data(self, target_week: str):
-        """Lit présences + linked_players en un seul bloc réseau."""
         ss = self._get_spreadsheet()
         if ss is None:
             return [], []
@@ -309,8 +300,6 @@ class TeamGenerator:
 
         return present_players, linked
 
-    # ── Génération équipes ────────────────────────────────────────────────────
-
     def generate_teams(self, players_list: list, linked_players: list):
         team_a, team_b   = [], []
         joueurs_restants = {}
@@ -339,13 +328,7 @@ class TeamGenerator:
         sb = sum(self.notes_dict.get(n.upper(), 0) for n in team_b)
         return team_a, team_b, sa, sb
 
-    # ── Blocage envoi unique par mercredi ─────────────────────────────────────
-
     def check_envoi_today(self) -> tuple[bool, str]:
-        """
-        Vérifie si une composition a déjà été envoyée aujourd'hui.
-        Retourne (deja_envoye: bool, nom_envoyeur: str).
-        """
         try:
             ws = self._get_or_create_sheet(
                 _SHEET_ENVOI, ["date", "heure", "envoyeur", "equipe_rouge", "equipe_verte"])
@@ -353,7 +336,7 @@ class TeamGenerator:
                 return False, ""
             rows = ws.get_all_values()
             today_str = datetime.now(TZ_ALGER).strftime("%Y-%m-%d")
-            for row in rows[1:]:   # ignorer l'en-tête
+            for row in rows[1:]:
                 if row and row[0].strip() == today_str:
                     envoyeur = row[2].strip() if len(row) > 2 else "Anonyme"
                     return True, envoyeur
@@ -362,7 +345,6 @@ class TeamGenerator:
         return False, ""
 
     def log_envoi(self, user_name: str, teams_data: dict):
-        """Enregistre l'envoi dans la feuille EnvoiLog."""
         try:
             ws = self._get_or_create_sheet(
                 _SHEET_ENVOI, ["date", "heure", "envoyeur", "equipe_rouge", "equipe_verte"])
@@ -373,20 +355,12 @@ class TeamGenerator:
             ws.append_row([
                 datetime.now(TZ_ALGER).strftime("%Y-%m-%d"),
                 datetime.now(TZ_ALGER).strftime("%H:%M:%S"),
-                user_name,
-                rouge,
-                verte,
+                user_name, rouge, verte,
             ])
         except Exception as e:
             st.warning(f"Impossible d'écrire dans EnvoiLog: {e}")
 
-    # ── Logs d'utilisation ────────────────────────────────────────────────────
-
     def log_usage(self, action: str, user_name: str, teams_data: dict = None):
-        """
-        Enregistre chaque action dans UsageLogs.
-        action : 'regeneration' | 'envoi_telegram'
-        """
         try:
             ws = self._get_or_create_sheet(
                 _SHEET_LOGS,
@@ -397,19 +371,14 @@ class TeamGenerator:
             verte = ", ".join(teams_data['team_b'][:6]) if teams_data else ""
             ws.append_row([
                 datetime.now(TZ_ALGER).strftime("%Y-%m-%d %H:%M:%S"),
-                action,
-                user_name,
-                rouge,
-                verte,
+                action, user_name, rouge, verte,
             ])
         except Exception as e:
             st.warning(f"Impossible d'écrire dans UsageLogs: {e}")
 
-    # ── Utilitaires ───────────────────────────────────────────────────────────
-
     @staticmethod
     def compter_mercredis_restants(date_debut, total_mercredis=52):
-        aujourdhui       = datetime.now().date()
+        aujourdhui       = datetime.now(TZ_ALGER).date()
         mercredis_passes = 0
         date_courante    = date_debut
         while date_courante <= aujourdhui:
@@ -418,15 +387,12 @@ class TeamGenerator:
             date_courante += timedelta(days=1)
         return max(0, total_mercredis - mercredis_passes) + 4
 
-    # ── Envoi Telegram ────────────────────────────────────────────────────────
-
     async def send_to_telegram(self, teams_data: dict, user_name: str,
                                 img_bytes: bytes = None) -> bool:
         bot_token = st.secrets["telegram"]["bot_token"]
         chat_id   = st.secrets["telegram"]["chat_id"]
         try:
             bot        = Bot(token=bot_token)
-            date_str   = datetime.now().strftime('%d/%m/%Y %H:%M')
             rouge_list = "\n".join(f"  {i}. {p}"
                                    for i,p in enumerate(teams_data['team_a'][:6], 1))
             verte_list = "\n".join(f"  {i}. {p}"
@@ -451,8 +417,9 @@ class TeamGenerator:
 
 # ─── Helpers Streamlit ────────────────────────────────────────────────────────
 
-def _load_teams(generator: TeamGenerator, user_name: str = "Anonyme") -> bool:
-    current_week = datetime.now().isocalendar()[1]
+def _load_teams(generator: TeamGenerator) -> bool:
+    """Charge joueurs + équipes SANS log (le log est fait explicitement au clic)."""
+    current_week = datetime.now(TZ_ALGER).isocalendar()[1]
     players, linked = generator.fetch_all_data(f"Semaine {current_week}")
     if not players:
         return False
@@ -463,20 +430,19 @@ def _load_teams(generator: TeamGenerator, user_name: str = "Anonyme") -> bool:
     }
     st.session_state.players_list = players
     st.session_state.pop('lineup_img', None)
-    # Log de la régénération (non bloquant)
-    generator.log_usage("regeneration", user_name,
-                         st.session_state.current_teams)
     return True
 
 
-def _get_or_build_image() -> bytes:
+def _get_or_build_image(user_name: str = "") -> bytes:
+    """Génère l'image seulement si absente du cache, en passant le nom."""
     if 'lineup_img' not in st.session_state:
         teams = st.session_state.current_teams
-        week  = teams.get('week', datetime.now().isocalendar()[1])
+        week  = teams.get('week', datetime.now(TZ_ALGER).isocalendar()[1])
         st.session_state.lineup_img = generate_lineup_image(
             teams['team_a'], teams['team_b'],
             teams['score_a'], teams['score_b'],
-            week_label=f"Semaine {week} - {datetime.now().strftime('%d/%m/%Y')}"
+            week_label=f"Semaine {week} - {datetime.now(TZ_ALGER).strftime('%d/%m/%Y')}",
+            user_name=user_name,
         )
     return st.session_state.lineup_img
 
@@ -485,35 +451,26 @@ def _get_or_build_image() -> bytes:
 
 @st.dialog("📤 Envoyer la composition")
 def dialog_envoi(generator: TeamGenerator, teams: dict):
-    """
-    Fenêtre modale d'envoi :
-    - Autorisé uniquement le mercredi
-    - Nom optionnel (vide = Anonyme)
-    - Vérifie si quelqu'un a déjà envoyé ce mercredi
-    - Logue l'envoi dans EnvoiLog et UsageLogs
-    """
-    # Heure locale Algérie (UTC+1) — important pour weekday() correct
     aujourd_hui = datetime.now(TZ_ALGER)
 
-    # Vérification 1 : on est bien mercredi (weekday == 2)
+    # ── Vérification 1 : uniquement le mercredi ───────────────────────────────
     if aujourd_hui.weekday() != 2:
-        jours_fr = ["lundi", "mardi", "mercredi", "jeudi",
-                    "vendredi", "samedi", "dimanche"]
+        jours_fr = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"]
         jour_actuel = jours_fr[aujourd_hui.weekday()]
-        jours_avant_mercredi = (2 - aujourd_hui.weekday()) % 7
-        prochain_mercredi = (aujourd_hui + timedelta(days=jours_avant_mercredi)).strftime("%d/%m/%Y")
+        jours_avant = (2 - aujourd_hui.weekday()) % 7
+        prochain    = (aujourd_hui + timedelta(days=jours_avant)).strftime("%d/%m/%Y")
         st.markdown(f"""
         <div class="blocked-banner">
             📅 L'envoi est autorisé <strong>uniquement le mercredi</strong>.<br>
             Aujourd'hui c'est <strong>{jour_actuel}</strong> —
-            prochain mercredi le <strong>{prochain_mercredi}</strong>.
+            prochain mercredi le <strong>{prochain}</strong>.
         </div>
         """, unsafe_allow_html=True)
         if st.button("✖ Fermer", use_container_width=True):
             st.rerun()
         return
 
-    # Vérification 2 : personne n'a encore envoyé ce mercredi
+    # ── Vérification 2 : pas déjà envoyé ce mercredi ─────────────────────────
     deja_envoye, envoyeur_du_jour = generator.check_envoi_today()
     if deja_envoye:
         st.markdown(f"""
@@ -527,7 +484,7 @@ def dialog_envoi(generator: TeamGenerator, teams: dict):
             st.rerun()
         return
 
-    # Saisie du nom (optionnel)
+    # ── Saisie du nom (optionnel) ─────────────────────────────────────────────
     st.markdown(
         "<p style='color:#a8d8ff; margin-bottom:4px;'>"
         "Tapez votre prénom, ou laissez vide pour rester anonyme.</p>",
@@ -544,12 +501,12 @@ def dialog_envoi(generator: TeamGenerator, teams: dict):
             user_name = nom_saisi.strip() if nom_saisi.strip() else "Anonyme"
 
             with st.spinner("Génération de l'image..."):
-                img = _get_or_build_image()
+                # FIX : passer user_name pour l'afficher dans l'image
+                img = _get_or_build_image(user_name=user_name)
             with st.spinner("Envoi sur Telegram..."):
                 ok = asyncio.run(generator.send_to_telegram(teams, user_name, img))
 
             if ok:
-                # Enregistrer dans EnvoiLog (blocage) + UsageLogs
                 generator.log_envoi(user_name, teams)
                 generator.log_usage("envoi_telegram", user_name, teams)
                 st.session_state.pop('lineup_img', None)
@@ -568,7 +525,7 @@ def dialog_envoi(generator: TeamGenerator, teams: dict):
 def main():
     st.markdown("""
     <div class="main-header">
-        <h1>⚽ FOOT5 COMPO ⚽</h1>
+        <h1>⚽ BRFOOT GENERATOR ⚽</h1>
     </div>
     """, unsafe_allow_html=True)
 
@@ -580,17 +537,16 @@ def main():
     if 'user_name' not in st.session_state:
         st.session_state.user_name = st.query_params.get("user", "Anonyme")
 
-
-    # Chargement initial
+    # Chargement initial — sans log
     if 'current_teams' not in st.session_state:
         with st.spinner("🎲 Chargement des joueurs..."):
-            if not _load_teams(generator, st.session_state.user_name):
+            if not _load_teams(generator):
                 st.error("❌ Aucun joueur trouvé pour cette semaine")
                 return
 
     teams = st.session_state.current_teams
 
-    # Résultat de l'envoi Telegram (affiché après fermeture modale)
+    # Résultat de l'envoi Telegram
     result = st.session_state.pop('telegram_result', None)
     if result:
         if result[0] == 'ok':
@@ -606,28 +562,52 @@ def main():
     with c2:
         if st.button("🔄 RÉGÉNÉRER", use_container_width=True):
             with st.spinner("Génération..."):
-                if _load_teams(generator, st.session_state.user_name):
+                if _load_teams(generator):
+                    # Log UNIQUEMENT sur clic humain explicite
+                    # Le flag évite tout double-log si Streamlit rerun juste après
+                    st.session_state['_pending_log_regen'] = True
                     st.rerun()
                 else:
                     st.error("❌ Erreur de chargement")
+
+    # Traiter le log après rerun (hors du bloc bouton pour éviter les reruns en boucle)
+    if st.session_state.pop('_pending_log_regen', False):
+        generator.log_usage("regeneration",
+                            st.session_state.user_name,
+                            st.session_state.current_teams)
 
     with c3:
         if st.button("📤 ENVOYER TELEGRAM", use_container_width=True):
             dialog_envoi(generator, teams)
 
-    # ── Note d'information ────────────────────────────────────────────────────
-    st.markdown("""
-    <div style="
-        background: rgba(74,158,255,0.07);
-        border-left: 3px solid rgba(74,158,255,0.50);
-        border-radius: 0 10px 10px 0;
-        padding: 14px 18px; margin: 18px 0 10px;
-        color: #a8d8ff; font-size: 13.5px; line-height: 1.6;
-    ">
-        ℹ️ Vous pouvez régénérer la composition plusieurs fois. Une fois que vous avez fait votre choix final, vous devez l’envoyer sur Telegram. Après envoi, aucune autre composition ne pourra être soumise.
-.
-    </div>
-    """, unsafe_allow_html=True)
+    # ── Expander Info (défile en dessous au clic) ────────────────────────────
+    with st.expander("ℹ️ Comment ça marche ?", expanded=False):
+        st.markdown("""
+        <div style="color:#a8d8ff; font-size:13.5px; line-height:1.8; padding:4px 0;">
+
+        <p><strong style="color:white;">🔄 Régénération</strong><br>
+        Vous pouvez régénérer la composition plusieurs fois. 
+        Une fois que vous avez fait votre choix final, envoyez la composition finale
+        sur Telegram.</p>
+
+        <p><strong style="color:white;">📤 Envoi Telegram</strong><br>
+        L'envoi est autorisé <strong>uniquement le mercredi</strong>. Une seule
+        composition peut être envoyée par mercredi — après l'envoi, le bouton est
+        bloqué pour tout le monde jusqu'au mercredi suivant.</p>
+
+        <p><strong style="color:white;">✅ Joueurs présents</strong><br>
+        L'application récupère automatiquement la liste des joueurs ayant voté
+        <strong>"oui"</strong> sur le groupe Telegram.</p>
+
+        <p><strong style="color:white;">➕ Ajouter un joueur manuellement</strong><br>
+        Commentez dans le groupe Telegram avec le signe
+        <strong style="color:#4a9eff;">+</strong> suivi du prénom :<br>
+        <code style="background:rgba(74,158,255,0.15); padding:3px 8px;
+        border-radius:5px;">+Kamel</code><br>
+        Faites-le <strong>au moins deux heure avant</strong> de lancer l'application.</p>
+
+        </div>
+        """, unsafe_allow_html=True)
 
     # ── Listes joueurs ────────────────────────────────────────────────────────
     col1, col2 = st.columns(2)
