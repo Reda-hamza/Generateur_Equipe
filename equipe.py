@@ -299,34 +299,60 @@ class TeamGenerator:
             st.warning(f"Erreur lecture Configuration: {e}")
 
         return present_players, linked
-
     def generate_teams(self, players_list: list, linked_players: list):
-        team_a, team_b   = [], []
-        joueurs_restants = {}
+        team_a, team_b = [], []
+        joueurs_a_repartir = {}
         linked_up = [p.upper().strip() for p in linked_players]
+        
+        # 1. Gestion des joueurs liés (ils vont en A)
         for nom in players_list:
-            if nom.upper().strip() in linked_up:
+            nom_clean = nom.upper().strip()
+            if nom_clean in linked_up:
                 team_a.append(nom)
             else:
-                joueurs_restants[nom] = self.notes_dict.get(nom.upper().strip(), 0)
+                joueurs_a_repartir[nom] = float(self.notes_dict.get(nom_clean, 3.5))
+
+        # 2. Compléter à 12 si besoin
         inv_idx = 1
-        while (len(team_a) + len(team_b) + len(joueurs_restants)) < 12:
-            joueurs_restants[f"Manque_jr {inv_idx}"] = 0
+        while (len(team_a) + len(team_b) + len(joueurs_a_repartir)) < 12:
+            joueurs_a_repartir[f"Manque_jr {inv_idx}"] = 3.0
             inv_idx += 1
-        for nom, _ in sorted(joueurs_restants.items(), key=lambda x: x[1], reverse=True):
-            sa = sum(self.notes_dict.get(n.upper(), 0) for n in team_a)
-            sb = sum(self.notes_dict.get(n.upper(), 0) for n in team_b)
-            if len(team_a) < 6 and (sa <= sb or len(team_b) >= 6):
+
+        # 3. Mélange initial pour la variété
+        items = list(joueurs_a_repartir.items())
+        random.shuffle(items)
+        
+        # 4. Tri par note décroissante
+        sorted_players = sorted(items, key=lambda x: x[1], reverse=True)
+
+        # 5. Répartition intelligente
+        for nom, note in sorted_players:
+            # Calcul des totaux actuels
+            score_a = sum(float(self.notes_dict.get(n.upper().strip(), 3.5)) for n in team_a)
+            score_b = sum(float(self.notes_dict.get(n.upper().strip(), 3.5)) for n in team_b)
+            
+            # CRITÈRE DE DÉCISION :
+            # On ajoute à l'équipe qui en a le moins. 
+            # Si égalité de nombre, on ajoute à celle qui a le score le plus bas.
+            if len(team_a) < 6 and len(team_b) < 6:
+                if score_a <= score_b:
+                    team_a.append(nom)
+                else:
+                    team_b.append(nom)
+            elif len(team_a) < 6:
                 team_a.append(nom)
-            elif len(team_b) < 6:
-                team_b.append(nom)
             else:
-                (team_a if len(team_a) < 6 else team_b).append(nom)
+                team_b.append(nom)
+
+        # 6. Mélange final pour l'affichage
         random.shuffle(team_a)
         random.shuffle(team_b)
-        sa = sum(self.notes_dict.get(n.upper(), 0) for n in team_a)
-        sb = sum(self.notes_dict.get(n.upper(), 0) for n in team_b)
-        return team_a, team_b, sa, sb
+
+        sa_final = sum(float(self.notes_dict.get(n.upper().strip(), 3.5)) for n in team_a)
+        sb_final = sum(float(self.notes_dict.get(n.upper().strip(), 3.5)) for n in team_b)
+        
+        return team_a, team_b, sa_final, sb_final
+
 
     def check_envoi_today(self) -> tuple[bool, str]:
         try:
