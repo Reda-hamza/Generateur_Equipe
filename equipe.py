@@ -300,72 +300,71 @@ class TeamGenerator:
 
         return present_players, linked
 
-def generate_teams(self, players_list: list, linked_players: list):
-    team_a, team_b = [], []
-    joueurs_restants = {}
-    linked_up = [p.upper().strip() for p in linked_players]
-    
-    # Séparer linked et non-linked
-    linked_list = []
-    free_list = []
-    
-    for nom in players_list:
-        if nom.upper().strip() in linked_up:
-            linked_list.append(nom)
-        else:
-            free_list.append(nom)
-    
-    # Ajouter des joueurs manquants si nécessaire
-    inv_idx = 1
-    while (len(linked_list) + len(free_list)) < 12:
-        free_list.append(f"Manque_jr {inv_idx}")
-        inv_idx += 1
-    
-    # Mélanger les joueurs libres avant distribution
-    random.shuffle(free_list)
-    
-    # Répartir équitablement les joueurs liés entre les deux équipes
-    random.shuffle(linked_list)  # Mélanger aussi les liés
-    for i, nom in enumerate(linked_list):
-        if i % 2 == 0:
-            team_a.append(nom)
-        else:
-            team_b.append(nom)
-    
-    # Distribuer les joueurs libres aléatoirement mais équitablement
-    for nom in free_list:
-        note = self.notes_dict.get(nom.upper().strip(), 0)
-        sa = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_a)
-        sb = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_b)
+   def generate_teams(self, players_list: list, linked_players: list):
+        team_a, team_b = [], []
+        joueurs_restants = {}
+        linked_up = [p.upper().strip() for p in linked_players]
         
-        # Ajouter un facteur aléatoire pour varier quand c'est équilibré
-        if len(team_a) < 6 and len(team_b) < 6:
-            # Choix pondéré basé sur les notes + aléatoire
-            diff = sa - sb
-            prob_a = 0.5 + (random.random() * 0.3)  # Base 50-80% de chance d'équipe A
-            if diff > 0:  # Team A plus forte
-                prob_a = 0.3  # 30% de chance d'aller en A
-            elif diff < 0:  # Team B plus forte
-                prob_a = 0.7  # 70% de chance d'aller en A
-            
-            if random.random() < prob_a:
+        # Séparer linked et non-linked
+        linked_list = []
+        free_list = []
+        
+        for nom in players_list:
+            if nom.upper().strip() in linked_up:
+                linked_list.append(nom)
+            else:
+                free_list.append(nom)
+        
+        # Ajouter des joueurs manquants si nécessaire
+        inv_idx = 1
+        while (len(linked_list) + len(free_list)) < 12:
+            free_list.append(f"Manque_jr {inv_idx}")
+            inv_idx += 1
+        
+        # Mélanger les joueurs libres avant distribution
+        random.shuffle(free_list)
+        
+        # Répartir équitablement les joueurs liés entre les deux équipes
+        random.shuffle(linked_list)  # Mélanger aussi les liés
+        for i, nom in enumerate(linked_list):
+            if i % 2 == 0:
                 team_a.append(nom)
             else:
                 team_b.append(nom)
-        elif len(team_a) < 6:
-            team_a.append(nom)
-        else:
-            team_b.append(nom)
-    
-    # Mélanger l'ordre final
-    random.shuffle(team_a)
-    random.shuffle(team_b)
-    
-    sa = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_a)
-    sb = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_b)
-    
-    return team_a, team_b, sa, sb
-
+        
+        # Distribuer les joueurs libres aléatoirement mais équitablement
+        for nom in free_list:
+            note = self.notes_dict.get(nom.upper().strip(), 0)
+            sa = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_a)
+            sb = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_b)
+            
+            # Ajouter un facteur aléatoire pour varier quand c'est équilibré
+            if len(team_a) < 6 and len(team_b) < 6:
+                # Choix pondéré basé sur les notes + aléatoire
+                diff = sa - sb
+                prob_a = 0.5 + (random.random() * 0.3)  # Base 50-80% de chance d'équipe A
+                if diff > 0:  # Team A plus forte
+                    prob_a = 0.3  # 30% de chance d'aller en A
+                elif diff < 0:  # Team B plus forte
+                    prob_a = 0.7  # 70% de chance d'aller en A
+                
+                if random.random() < prob_a:
+                    team_a.append(nom)
+                else:
+                    team_b.append(nom)
+            elif len(team_a) < 6:
+                team_a.append(nom)
+            else:
+                team_b.append(nom)
+        
+        # Mélanger l'ordre final
+        random.shuffle(team_a)
+        random.shuffle(team_b)
+        
+        sa = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_a)
+        sb = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_b)
+        
+        return team_a, team_b, sa, sb
 
     def check_envoi_today(self) -> tuple[bool, str]:
         try:
