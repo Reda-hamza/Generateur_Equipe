@@ -301,60 +301,70 @@ class TeamGenerator:
         return present_players, linked
 
     def generate_teams(self, players_list: list, linked_players: list):
-        team_a, team_b = [], []
-        joueurs_restants = {}
-        linked_up = [p.upper().strip() for p in linked_players]
+    team_a, team_b = [], []
+    joueurs_restants = {}
+    linked_up = [p.upper().strip() for p in linked_players]
+    
+    # Séparer linked et non-linked
+    linked_list = []
+    free_list = []
+    
+    for nom in players_list:
+        if nom.upper().strip() in linked_up:
+            linked_list.append(nom)
+        else:
+            free_list.append(nom)
+    
+    # Ajouter des joueurs manquants si nécessaire
+    inv_idx = 1
+    while (len(linked_list) + len(free_list)) < 12:
+        free_list.append(f"Manque_jr {inv_idx}")
+        inv_idx += 1
+    
+    # Mélanger les joueurs libres avant distribution
+    random.shuffle(free_list)
+    
+    # Répartir équitablement les joueurs liés entre les deux équipes
+    random.shuffle(linked_list)  # Mélanger aussi les liés
+    for i, nom in enumerate(linked_list):
+        if i % 2 == 0:
+            team_a.append(nom)
+        else:
+            team_b.append(nom)
+    
+    # Distribuer les joueurs libres aléatoirement mais équitablement
+    for nom in free_list:
+        note = self.notes_dict.get(nom.upper().strip(), 0)
+        sa = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_a)
+        sb = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_b)
         
-        # 1. Séparer les joueurs liés (priorité équipe A)
-        for nom in players_list:
-            nom_clean = nom.upper().strip()
-            if nom_clean in linked_up:
-                team_a.append(nom)
-            else:
-                joueurs_restants[nom] = self.notes_dict.get(nom_clean, 0)
-
-        # 2. Compléter avec des joueurs fictifs si moins de 12
-        inv_idx = 1
-        while (len(team_a) + len(team_b) + len(joueurs_restants)) < 12:
-            joueurs_restants[f"Manque_jr {inv_idx}"] = 0
-            inv_idx += 1
-
-        # 3. L'ASTUCE POUR LA VARIÉTÉ : 
-        # On transforme le dictionnaire en liste et on la mélange AVANT le tri.
-        items = list(joueurs_restants.items())
-        random.shuffle(items)
-        
-        # 4. Trier par note (le mélange précédent garantit que les égalités de notes 
-        # ne produisent pas toujours le même ordre)
-        sorted_players = sorted(items, key=lambda x: x[1], reverse=True)
-
-        # 5. Répartition équilibrée (Serpentin / Greedy)
-        for nom, note in sorted_players:
-            # Calcul des forces actuelles
-            sa = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_a)
-            sb = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_b)
+        # Ajouter un facteur aléatoire pour varier quand c'est équilibré
+        if len(team_a) < 6 and len(team_b) < 6:
+            # Choix pondéré basé sur les notes + aléatoire
+            diff = sa - sb
+            prob_a = 0.5 + (random.random() * 0.3)  # Base 50-80% de chance d'équipe A
+            if diff > 0:  # Team A plus forte
+                prob_a = 0.3  # 30% de chance d'aller en A
+            elif diff < 0:  # Team B plus forte
+                prob_a = 0.7  # 70% de chance d'aller en A
             
-            # On ajoute à l'équipe qui a le moins de joueurs ET le score le plus bas
-            if len(team_a) < 6 and (sa <= sb or len(team_b) >= 6):
+            if random.random() < prob_a:
                 team_a.append(nom)
-            elif len(team_b) < 6:
-                team_b.append(nom)
             else:
-                # Sécurité pour remplir la dernière place dispo
-                if len(team_a) < 6:
-                    team_a.append(nom)
-                else:
-                    team_b.append(nom)
-
-        # 6. Mélange final pour l'affichage visuel sur le terrain
-        random.shuffle(team_a)
-        random.shuffle(team_b)
-
-        # 7. Calcul des scores finaux pour le retour
-        sa_final = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_a)
-        sb_final = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_b)
-        
-        return team_a, team_b, sa_final, sb_final
+                team_b.append(nom)
+        elif len(team_a) < 6:
+            team_a.append(nom)
+        else:
+            team_b.append(nom)
+    
+    # Mélanger l'ordre final
+    random.shuffle(team_a)
+    random.shuffle(team_b)
+    
+    sa = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_a)
+    sb = sum(self.notes_dict.get(n.upper().strip(), 0) for n in team_b)
+    
+    return team_a, team_b, sa, sb
 
 
     def check_envoi_today(self) -> tuple[bool, str]:
