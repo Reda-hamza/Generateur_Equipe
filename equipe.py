@@ -300,7 +300,7 @@ class TeamGenerator:
 
         return present_players, linked
 
-        def generate_teams(self, players_list: list, linked_players: list):
+    def generate_teams(self, players_list: list, linked_players: list):
         team_a, team_b   = [], []
         joueurs_restants = {}
         linked_up = [p.upper().strip() for p in linked_players]
