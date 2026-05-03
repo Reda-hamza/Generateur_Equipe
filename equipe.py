@@ -411,7 +411,7 @@ class TeamGenerator:
             if date_courante.weekday() == 2:
                 mercredis_passes += 1
             date_courante += timedelta(days=1)
-        return max(0, total_mercredis - mercredis_passes) + 4
+        return max(0, total_mercredis - mercredis_passes + 4)
 
     async def send_to_telegram(self, teams_data: dict, user_name: str,
                                 img_bytes: bytes = None) -> bool:
