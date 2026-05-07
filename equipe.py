@@ -202,11 +202,30 @@ class TeamGenerator:
         self.load_notes()
 
     def load_notes(self):
+        """Charge les notes depuis la feuille 'Notes' du Google Sheet.
+        Colonnes attendues : Nom | Note
+        """
+        ss = self._get_spreadsheet()
+        if ss is None:
+            self.notes_dict = {}
+            return
         try:
-            with open('notes_joureurs.json','r',encoding='utf-8') as f:
-                self.notes_dict = {k.upper().strip(): float(v)
-                                   for k,v in json.load(f).items()}
-        except FileNotFoundError:
+            ws = ss.worksheet("Notes")
+            rows = ws.get_all_values()
+            self.notes_dict = {}
+            for row in rows[1:]:   # ignorer l'en-tête
+                if len(row) >= 2 and row[0].strip() and row[1].strip():
+                    try:
+                        nom  = row[0].strip().upper()
+                        note = float(row[1].strip().replace(',', '.'))
+                        self.notes_dict[nom] = note
+                    except ValueError:
+                        pass   # ignorer les lignes avec note non numérique
+        except gspread.WorksheetNotFound:
+            st.warning("Feuille 'Notes' introuvable dans le Google Sheet.")
+            self.notes_dict = {}
+        except Exception as e:
+            st.warning(f"Erreur lecture feuille Notes: {e}")
             self.notes_dict = {}
 
     def _get_spreadsheet(self):
