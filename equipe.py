@@ -143,7 +143,7 @@ def _draw_jersey(ax, cx, cy, name, color, s=0.056):
     ax.add_patch(patches.Arc((cx,cy+h/2),hw*0.55,h*0.24,angle=0,theta1=180,theta2=360,
                               color='white',lw=1.3,zorder=6))
     short = name[:8]+"." if len(name)>8 else name
-    ax.text(cx,cy-h/2-0.022,short,ha='center',va='top',fontsize=10,fontweight='bold',
+    ax.text(cx,cy-h/2-0.022,short,ha='center',va='top',fontsize=13,fontweight='bold',
             color='white',zorder=8,
             path_effects=[pe.withStroke(linewidth=2.2,foreground='black')])
 
@@ -383,7 +383,7 @@ class TeamGenerator:
             verte_list = "\n".join(f"  {i}. {p}"
                                    for i,p in enumerate(teams_data['team_b'][:6],1))
             restants = self.compter_mercredis_restants(datetime(2025,4,23).date())
-            caption = f"Genere par : {user_name}\n{restants} Seances Restantes"
+            caption = f"{restants} Seances Restantes"
             if img_bytes:
                 await bot.send_photo(chat_id=chat_id,
                                      photo=io.BytesIO(img_bytes), caption=caption)
@@ -476,7 +476,7 @@ def _render_team(players, notes_dict, color_class, num_class, title, color_hex, 
 def dialog_envoi(generator: TeamGenerator, teams: dict):
     aujourd_hui = datetime.now(TZ_ALGER)
 
-    if aujourd_hui.weekday() != 2:
+    if aujourd_hui.weekday() != 1:
         jours_fr = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"]
         jour_actuel = jours_fr[aujourd_hui.weekday()]
         prochain = (aujourd_hui + timedelta(days=(2-aujourd_hui.weekday())%7)).strftime("%d/%m/%Y")
