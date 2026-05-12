@@ -476,7 +476,7 @@ def _render_team(players, notes_dict, color_class, num_class, title, color_hex, 
 def dialog_envoi(generator: TeamGenerator, teams: dict):
     aujourd_hui = datetime.now(TZ_ALGER)
 
-    if aujourd_hui.weekday() != 1:
+    if aujourd_hui.weekday() != 2:
         jours_fr = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"]
         jour_actuel = jours_fr[aujourd_hui.weekday()]
         prochain = (aujourd_hui + timedelta(days=(2-aujourd_hui.weekday())%7)).strftime("%d/%m/%Y")
