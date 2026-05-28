@@ -371,7 +371,7 @@ class TeamGenerator:
         while d<=aujourdhui:
             if d.weekday()==2: passes+=1
             d+=timedelta(days=1)
-        return max(0, total_mercredis - passes + 4)
+        return max(0, total_mercredis - passes + 1)
 
     async def send_to_telegram(self, teams_data, user_name, img_bytes=None):
         bot_token = st.secrets["telegram"]["bot_token"]
@@ -382,7 +382,7 @@ class TeamGenerator:
                                    for i,p in enumerate(teams_data['team_a'][:6],1))
             verte_list = "\n".join(f"  {i}. {p}"
                                    for i,p in enumerate(teams_data['team_b'][:6],1))
-            restants = self.compter_mercredis_restants(datetime(2025,4,23).date())
+            restants = self.compter_mercredis_restants(datetime(2026,5,20).date())
             caption = f"{restants} Seances Restantes"
             if img_bytes:
                 await bot.send_photo(chat_id=chat_id,
