@@ -371,7 +371,7 @@ class TeamGenerator:
         while d<=aujourdhui:
             if d.weekday()==2: passes+=1
             d+=timedelta(days=1)
-        return max(0, total_mercredis - passes + 1)
+        return max(0, total_mercredis - passes + 7)
 
     async def send_to_telegram(self, teams_data, user_name, img_bytes=None):
         bot_token = st.secrets["telegram"]["bot_token"]
